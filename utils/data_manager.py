@@ -1,42 +1,127 @@
 """
-data_manager.py – Gestione persistente dei dati delle piante.
-I dati vengono salvati in data/plants.json.
+data_manager.py – Gestione persistente dei dati delle piante via Google Sheets.
+
+Struttura dello Spreadsheet (due fogli):
+  - plants       : id | name | room | watering_frequency_days | notes | image_url | created_at
+  - watering_log : id | plant_id | watered_at
+
+Le credenziali vengono lette da st.secrets["gcp_service_account"].
+L'ID dello Spreadsheet viene letto da st.secrets["SPREADSHEET_ID"].
 """
 
-import json
 import uuid
-from datetime import datetime
-from pathlib import Path
+from datetime import datetime, timedelta
 
-DATA_FILE = Path(__file__).parent.parent / "data" / "plants.json"
+import gspread
+import streamlit as st
+from google.oauth2.service_account import Credentials
+
+# ──────────────────────────────────────────────
+# Costanti
+# ──────────────────────────────────────────────
+
+SCOPES = [
+    "https://www.googleapis.com/auth/spreadsheets",
+    "https://www.googleapis.com/auth/drive",
+]
+
+PLANTS_SHEET = "plants"
+WATERING_SHEET = "watering_log"
+
+PLANTS_HEADERS = [
+    "id", "name", "room", "watering_frequency_days",
+    "notes", "image_url", "created_at",
+]
+WATERING_HEADERS = ["id", "plant_id", "watered_at"]
 
 
 # ──────────────────────────────────────────────
-# I/O di base
+# Connessione (singleton via cache_resource)
 # ──────────────────────────────────────────────
 
-def _load_raw() -> dict:
-    """Carica il contenuto grezzo del file JSON."""
-    if not DATA_FILE.exists():
-        return {"plants": []}
-    with DATA_FILE.open("r", encoding="utf-8") as f:
-        return json.load(f)
+@st.cache_resource
+def _get_spreadsheet() -> gspread.Spreadsheet:
+    """Crea e restituisce il client gspread (singleton)."""
+    creds = Credentials.from_service_account_info(
+        st.secrets["gcp_service_account"],
+        scopes=SCOPES,
+    )
+    client = gspread.authorize(creds)
+    spreadsheet = client.open_by_key(st.secrets["SPREADSHEET_ID"])
+    _ensure_sheets(spreadsheet)
+    return spreadsheet
 
 
-def _save_raw(data: dict) -> None:
-    """Scrive il contenuto aggiornato nel file JSON."""
-    DATA_FILE.parent.mkdir(parents=True, exist_ok=True)
-    with DATA_FILE.open("w", encoding="utf-8") as f:
-        json.dump(data, f, ensure_ascii=False, indent=2)
+def _ensure_sheets(spreadsheet: gspread.Spreadsheet) -> None:
+    """Crea i fogli con intestazioni se non esistono già."""
+    existing = {ws.title for ws in spreadsheet.worksheets()}
+
+    if PLANTS_SHEET not in existing:
+        ws = spreadsheet.add_worksheet(PLANTS_SHEET, rows=1000, cols=len(PLANTS_HEADERS))
+        ws.append_row(PLANTS_HEADERS)
+
+    if WATERING_SHEET not in existing:
+        ws = spreadsheet.add_worksheet(WATERING_SHEET, rows=5000, cols=len(WATERING_HEADERS))
+        ws.append_row(WATERING_HEADERS)
 
 
 # ──────────────────────────────────────────────
-# API pubblica
+# Lettura dati (con cache breve)
+# ──────────────────────────────────────────────
+
+@st.cache_data(ttl=30)
+def _read_plants_rows() -> list[dict]:
+    """Legge tutti i record dal foglio plants."""
+    ws = _get_spreadsheet().worksheet(PLANTS_SHEET)
+    return ws.get_all_records()
+
+
+@st.cache_data(ttl=30)
+def _read_watering_rows() -> list[dict]:
+    """Legge tutti i record dal foglio watering_log."""
+    ws = _get_spreadsheet().worksheet(WATERING_SHEET)
+    return ws.get_all_records()
+
+
+def _invalidate_cache() -> None:
+    """Invalida la cache dei dati dopo ogni scrittura."""
+    _read_plants_rows.clear()
+    _read_watering_rows.clear()
+
+
+# ──────────────────────────────────────────────
+# Costruzione oggetto pianta arricchito
+# ──────────────────────────────────────────────
+
+def _build_plant(row: dict, watering_rows: list[dict]) -> dict:
+    """Assembla un dict pianta con watering_log annidato."""
+    plant_id = row["id"]
+    log = sorted(
+        r["watered_at"]
+        for r in watering_rows
+        if r["plant_id"] == plant_id and r["watered_at"]
+    )
+    return {
+        "id": plant_id,
+        "name": row.get("name", ""),
+        "room": row.get("room", ""),
+        "watering_frequency_days": int(row.get("watering_frequency_days", 7)),
+        "notes": row.get("notes", ""),
+        "image_url": row.get("image_url", ""),
+        "created_at": row.get("created_at", ""),
+        "watering_log": log,
+    }
+
+
+# ──────────────────────────────────────────────
+# API pubblica – CRUD piante
 # ──────────────────────────────────────────────
 
 def get_all_plants() -> list[dict]:
-    """Restituisce la lista di tutte le piante."""
-    return _load_raw().get("plants", [])
+    """Restituisce la lista di tutte le piante con il loro watering_log."""
+    plant_rows = _read_plants_rows()
+    watering_rows = _read_watering_rows()
+    return [_build_plant(r, watering_rows) for r in plant_rows]
 
 
 def get_plant_by_id(plant_id: str) -> dict | None:
@@ -49,21 +134,32 @@ def add_plant(
     room: str,
     watering_frequency_days: int,
     notes: str = "",
+    image_url: str = "",
 ) -> dict:
     """Aggiunge una nuova pianta e restituisce l'oggetto creato."""
-    plant = {
-        "id": str(uuid.uuid4()),
+    plant_id = str(uuid.uuid4())
+    created_at = datetime.now().isoformat()
+    ws = _get_spreadsheet().worksheet(PLANTS_SHEET)
+    ws.append_row([
+        plant_id,
+        name.strip(),
+        room.strip(),
+        watering_frequency_days,
+        notes.strip(),
+        image_url,
+        created_at,
+    ])
+    _invalidate_cache()
+    return {
+        "id": plant_id,
         "name": name.strip(),
         "room": room.strip(),
         "watering_frequency_days": watering_frequency_days,
         "notes": notes.strip(),
-        "created_at": datetime.now().isoformat(),
+        "image_url": image_url,
+        "created_at": created_at,
         "watering_log": [],
     }
-    data = _load_raw()
-    data["plants"].append(plant)
-    _save_raw(data)
-    return plant
 
 
 def update_plant(plant_id: str, **fields) -> bool:
@@ -71,27 +167,51 @@ def update_plant(plant_id: str, **fields) -> bool:
     Aggiorna i campi indicati per la pianta con l'ID specificato.
     Restituisce True se l'aggiornamento è andato a buon fine.
     """
-    data = _load_raw()
-    for plant in data["plants"]:
-        if plant["id"] == plant_id:
+    ws = _get_spreadsheet().worksheet(PLANTS_SHEET)
+    records = ws.get_all_records()
+
+    for i, row in enumerate(records, start=2):  # riga 1 = intestazioni
+        if row["id"] == plant_id:
             for key, value in fields.items():
-                if key in plant and key not in ("id", "created_at", "watering_log"):
-                    plant[key] = value
-            _save_raw(data)
+                if key in PLANTS_HEADERS and key not in ("id", "created_at"):
+                    col = PLANTS_HEADERS.index(key) + 1
+                    ws.update_cell(i, col, value)
+            _invalidate_cache()
             return True
     return False
 
 
 def delete_plant(plant_id: str) -> bool:
-    """Elimina la pianta con l'ID specificato. Restituisce True se eliminata."""
-    data = _load_raw()
-    original_len = len(data["plants"])
-    data["plants"] = [p for p in data["plants"] if p["id"] != plant_id]
-    if len(data["plants"]) < original_len:
-        _save_raw(data)
-        return True
-    return False
+    """Elimina la pianta e tutto il suo watering_log. Restituisce True se eliminata."""
+    deleted = False
 
+    # Elimina dal foglio plants
+    ws_plants = _get_spreadsheet().worksheet(PLANTS_SHEET)
+    records = ws_plants.get_all_records()
+    for i, row in enumerate(records, start=2):
+        if row["id"] == plant_id:
+            ws_plants.delete_rows(i)
+            deleted = True
+            break
+
+    # Elimina le righe di watering_log associate (in ordine inverso)
+    ws_log = _get_spreadsheet().worksheet(WATERING_SHEET)
+    log_records = ws_log.get_all_records()
+    rows_to_delete = [
+        i for i, r in enumerate(log_records, start=2)
+        if r["plant_id"] == plant_id
+    ]
+    for i in reversed(rows_to_delete):
+        ws_log.delete_rows(i)
+
+    if deleted:
+        _invalidate_cache()
+    return deleted
+
+
+# ──────────────────────────────────────────────
+# API pubblica – Log annaffiature
+# ──────────────────────────────────────────────
 
 def log_watering(plant_id: str, timestamp: datetime | None = None) -> bool:
     """
@@ -100,31 +220,33 @@ def log_watering(plant_id: str, timestamp: datetime | None = None) -> bool:
     Restituisce True se l'operazione è riuscita.
     """
     ts = (timestamp or datetime.now()).isoformat()
-    data = _load_raw()
-    for plant in data["plants"]:
-        if plant["id"] == plant_id:
-            plant["watering_log"].append(ts)
-            # Mantieni il log ordinato in ordine crescente
-            plant["watering_log"].sort()
-            _save_raw(data)
-            return True
-    return False
+    ws = _get_spreadsheet().worksheet(WATERING_SHEET)
+    ws.append_row([str(uuid.uuid4()), plant_id, ts])
+    _invalidate_cache()
+    return True
 
 
 def delete_watering_log_entry(plant_id: str, index: int) -> bool:
-    """Rimuove una singola voce del log di annaffiatura per posizione."""
-    data = _load_raw()
-    for plant in data["plants"]:
-        if plant["id"] == plant_id:
-            if 0 <= index < len(plant["watering_log"]):
-                plant["watering_log"].pop(index)
-                _save_raw(data)
-                return True
+    """Rimuove una singola voce del log di annaffiatura per posizione (0‑based, ordine crescente)."""
+    ws = _get_spreadsheet().worksheet(WATERING_SHEET)
+    records = ws.get_all_records()
+
+    # Filtra solo le righe di questa pianta, ordinate per timestamp
+    plant_log = sorted(
+        [(i, r) for i, r in enumerate(records, start=2) if r["plant_id"] == plant_id],
+        key=lambda x: x[1]["watered_at"],
+    )
+
+    if 0 <= index < len(plant_log):
+        row_number = plant_log[index][0]
+        ws.delete_rows(row_number)
+        _invalidate_cache()
+        return True
     return False
 
 
 # ──────────────────────────────────────────────
-# Helper di stato
+# Helper di stato (identici alla versione JSON)
 # ──────────────────────────────────────────────
 
 def get_last_watered(plant: dict) -> datetime | None:
@@ -143,7 +265,6 @@ def get_next_watering(plant: dict) -> datetime | None:
     last = get_last_watered(plant)
     if last is None:
         return None
-    from datetime import timedelta
     return last + timedelta(days=plant["watering_frequency_days"])
 
 

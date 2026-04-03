@@ -442,7 +442,7 @@ elif "Calendario" in page:
                     }
                     return f"background-color: {color_map.get(val, 'white')}"
 
-                styled = display_df.style.applymap(color_status, subset=["Stato"])
+                styled = display_df.style.map(color_status, subset=["Stato"])
                 st.dataframe(styled, use_container_width=True, hide_index=True)
 
 
