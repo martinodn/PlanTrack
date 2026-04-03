@@ -219,7 +219,6 @@ def _render_plant_card(plant: dict, col):
     📅 Prossima: <b>{next_str}</b>
   </p>
   <p style="font-size:.80rem;color:#888;font-style:italic">{_days_label(plant)}</p>
-  <p style="font-size:.70rem;color:red;font-style:italic">DEBUG CASA: {plant.get('house', 'N/A')}</p>
   {notes_html}
 </div>
 """,
