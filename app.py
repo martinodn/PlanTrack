@@ -155,10 +155,15 @@ def _render_plant_card(plant: dict, col):
         if plant.get("notes") else ""
     )
 
+    image_html = ""
+    if plant.get("image_url"):
+        image_html = f'<img src="{plant["image_url"]}" style="width:100%; border-radius:12px; margin-bottom:12px; object-fit:cover; max-height:150px;">'
+
     with col:
         st.markdown(
             f"""
 <div class="plant-card">
+  {image_html}
   <h4 style="margin:0 0 4px 0;color:#2E7D32">{plant['name']}</h4>
   <p style="margin:0 0 6px 0;color:#757575;font-size:.85rem">🏠 {plant['room']} &nbsp;|&nbsp; 💧 ogni {plant['watering_frequency_days']} giorni</p>
   {_badge(status)}
@@ -292,6 +297,7 @@ elif "Aggiungi" in page:
             )
 
         notes = st.text_area("📝 Note (opzionale)", placeholder="es. Annaffia il sottovaso, evita ristagni…", height=90)
+        image_url = st.text_input("🖼 URL Immagine (opzionale)", placeholder="https://images.unsplash.com/photo-...")
 
         st.markdown("<br>", unsafe_allow_html=True)
         submitted = st.form_submit_button("✅ Registra pianta", use_container_width=True)
@@ -306,6 +312,7 @@ elif "Aggiungi" in page:
                 room=room,
                 watering_frequency_days=int(freq),
                 notes=notes,
+                image_url=image_url,
             )
             st.success(f"✅ **{plant['name']}** aggiunta con successo!")
 
@@ -475,6 +482,7 @@ elif "Gestisci" in page:
                     new_freq  = st.number_input("Frequenza (giorni)", min_value=1, max_value=365,
                                                 value=plant["watering_frequency_days"])
                 new_notes = st.text_area("Note", value=plant.get("notes", ""), height=80)
+                new_image = st.text_input("URL Immagine", value=plant.get("image_url", ""))
 
                 save = st.form_submit_button("💾 Salva modifiche", use_container_width=True)
 
@@ -485,6 +493,7 @@ elif "Gestisci" in page:
                     room=new_room,
                     watering_frequency_days=int(new_freq),
                     notes=new_notes,
+                    image_url=new_image,
                 )
                 st.success("✅ Pianta aggiornata!")
                 st.rerun()
