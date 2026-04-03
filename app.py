@@ -155,17 +155,15 @@ def _render_plant_card(plant: dict, col):
         if plant.get("notes") else ""
     )
 
-    with col:
-        # Se c'è un'immagine, la mostriamo sopra la card
-        if plant.get("image_url"):
-            try:
-                st.image(plant["image_url"], use_container_width=True)
-            except Exception:
-                st.error("Errore nel caricamento dell'immagine")
+    image_html = ""
+    if plant.get("image_url"):
+        image_html = f'<img src="{plant["image_url"]}" style="width:100%; border-radius:12px; margin-bottom:12px; object-fit:cover; height:140px;">'
 
+    with col:
         st.markdown(
             f"""
 <div class="plant-card">
+  {image_html}
   <h4 style="margin:0 0 4px 0;color:#2E7D32">{plant['name']}</h4>
   <p style="margin:0 0 6px 0;color:#757575;font-size:.85rem">🏠 {plant['room']} &nbsp;|&nbsp; 💧 ogni {plant['watering_frequency_days']} giorni</p>
   {_badge(status)}
