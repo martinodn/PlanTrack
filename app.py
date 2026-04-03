@@ -156,10 +156,6 @@ def _render_plant_card(plant: dict, col):
     )
 
     with col:
-        # Debug: mostra l'URL se presente (puoi rimuoverlo dopo)
-        if plant.get("image_url"):
-            st.caption(f"DEBUG URL: {plant['image_url'][:30]}...")
-            
         # Se c'è un'immagine, la mostriamo sopra la card
         if plant.get("image_url"):
             try:
