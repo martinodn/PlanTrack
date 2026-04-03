@@ -41,6 +41,53 @@ from utils.calendar_utils import (
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
+# Autenticazione
+# ──────────────────────────────────────────────────────────────────────────────
+
+def check_password():
+    """Restituisce True se l'utente ha inserito la password corretta."""
+
+    def password_entered():
+        """Controlla se la password inserita è corretta."""
+        if st.session_state["password"] == st.secrets["PASSWORD"]:
+            st.session_state["password_correct"] = True
+            del st.session_state["password"]  # non conservare la password in chiaro
+        else:
+            st.session_state["password_correct"] = False
+
+    if "password_correct" not in st.session_state:
+        # Prima esecuzione, mostra il form di login
+        st.markdown(
+            """
+            <div style="text-align:center;padding:50px 0">
+              <span style="font-size:5rem">🌿</span>
+              <h1 style="color:#2E7D32">PlanTrack Login</h1>
+              <p>Inserisci la password per gestire le tue piante</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
+        st.text_input(
+            "Password", type="password", on_change=password_entered, key="password"
+        )
+        if "password_correct" in st.session_state and not st.session_state["password_correct"]:
+            st.error("😕 Password errata")
+        return False
+    elif not st.session_state["password_correct"]:
+        # Password errata, mostra di nuovo il form
+        st.text_input(
+            "Password", type="password", on_change=password_entered, key="password"
+        )
+        st.error("😕 Password errata")
+        return False
+    else:
+        # Password corretta
+        return True
+
+if not check_password():
+    st.stop()
+
+# ──────────────────────────────────────────────────────────────────────────────
 # Configurazione pagina
 # ──────────────────────────────────────────────────────────────────────────────
 st.set_page_config(
