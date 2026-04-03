@@ -299,7 +299,11 @@ elif "Aggiungi" in page:
             )
 
         notes = st.text_area("📝 Note (opzionale)", placeholder="es. Annaffia il sottovaso, evita ristagni…", height=90)
-        image_url = st.text_input("🖼 URL Immagine (opzionale)", placeholder="https://images.unsplash.com/photo-...")
+        image_url = st.text_input(
+            "🖼 URL Immagine (opzionale)", 
+            placeholder="https://.../immagine.jpg",
+            help="Assicurati che sia un link diretto all'immagine (deve finire con .jpg, .png, .webp, ecc.)"
+        )
 
         st.markdown("<br>", unsafe_allow_html=True)
         submitted = st.form_submit_button("✅ Registra pianta", use_container_width=True)
@@ -484,7 +488,11 @@ elif "Gestisci" in page:
                     new_freq  = st.number_input("Frequenza (giorni)", min_value=1, max_value=365,
                                                 value=plant["watering_frequency_days"])
                 new_notes = st.text_area("Note", value=plant.get("notes", ""), height=80)
-                new_image = st.text_input("URL Immagine", value=plant.get("image_url", ""))
+                new_image = st.text_input(
+                    "URL Immagine", 
+                    value=plant.get("image_url", ""),
+                    help="Assicurati che sia un link diretto all'immagine (deve finire con .jpg, .png, .webp, ecc.)"
+                )
 
                 save = st.form_submit_button("💾 Salva modifiche", use_container_width=True)
 
