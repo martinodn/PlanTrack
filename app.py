@@ -242,6 +242,22 @@ with st.sidebar:
         unsafe_allow_html=True,
     )
 
+    # ── Selettore Casa ──────────────────────────────────
+    st.divider()
+    all_plants_raw = get_all_plants()
+    # Assicuriamoci che Vali e Fedi siano presenti e in ordine (Vali per prima)
+    other_houses = sorted({p.get("house", "Vali") for p in all_plants_raw} - {"Vali", "Fedi", "Casa Principale"})
+    houses = ["Vali", "Fedi"] + other_houses
+    
+    selected_house = st.sidebar.selectbox("🏠 Seleziona Casa", houses, index=0)
+    
+    # Filtro globale per casa (mappando anche eventuali vecchi valori a Vali)
+    plants_all = [
+        p for p in all_plants_raw 
+        if (p.get("house") or "Vali") == selected_house or (selected_house == "Vali" and p.get("house") == "Casa Principale")
+    ]
+    # ──────────────────────────────────────────────────
+
     page = st.radio(
         "Navigazione",
         [
@@ -255,8 +271,7 @@ with st.sidebar:
     )
 
     st.divider()
-    plants_all = get_all_plants()
-    st.metric("Piante registrate", len(plants_all))
+    st.metric("Piante in questa casa", len(plants_all))
     overdue_count = sum(1 for p in plants_all if watering_status(p) in ("overdue", "today"))
     st.metric("Da annaffiare oggi / in ritardo", overdue_count)
 
@@ -266,9 +281,9 @@ with st.sidebar:
 # ──────────────────────────────────────────────────────────────────────────────
 
 if "Dashboard" in page:
-    st.markdown('<p class="section-title">🏠 Dashboard</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="section-title">🏠 Dashboard — {selected_house}</p>', unsafe_allow_html=True)
 
-    plants = get_all_plants()
+    plants = plants_all
 
     if not plants:
         st.info(
@@ -342,6 +357,7 @@ elif "Aggiungi" in page:
                 "💧 Frequenza di annaffiatura (giorni) *",
                 min_value=1, max_value=365, value=7, step=1,
             )
+            house_name = st.text_input("🏠 Casa *", value=selected_house, help="es. Casa Milano, Casa Mare...")
 
         notes = st.text_area("📝 Note (opzionale)", placeholder="es. Annaffia il sottovaso, evita ristagni…", height=90)
         image_url = st.text_input(
@@ -364,6 +380,7 @@ elif "Aggiungi" in page:
                 watering_frequency_days=int(freq),
                 notes=notes,
                 image_url=image_url,
+                house=house_name,
             )
             st.success(f"✅ **{plant['name']}** aggiunta con successo!")
 
@@ -377,9 +394,9 @@ elif "Aggiungi" in page:
 # ──────────────────────────────────────────────────────────────────────────────
 
 elif "Annaffiatura" in page:
-    st.markdown('<p class="section-title">💧 Registra un\'annaffiatura</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="section-title">💧 Registra un\'annaffiatura — {selected_house}</p>', unsafe_allow_html=True)
 
-    plants = get_all_plants()
+    plants = plants_all
     if not plants:
         st.info("Nessuna pianta registrata. Prima aggiungi una pianta!", icon="🌱")
     else:
@@ -446,7 +463,8 @@ elif "Annaffiatura" in page:
         # ── Storico log (espandibile) ──────────────────────────
         st.divider()
         with st.expander("📋 Storico annaffiature (modifica / elimina voci)"):
-            plants_refresh = get_all_plants()
+            # Ricarichiamo per avere i dati freschi
+            plants_refresh = [p for p in get_all_plants() if p.get("house", "Casa Principale") == selected_house]
             for plant in plants_refresh:
                 log = plant.get("watering_log", [])
                 if not log:
@@ -467,9 +485,9 @@ elif "Annaffiatura" in page:
 # ──────────────────────────────────────────────────────────────────────────────
 
 elif "Calendario" in page:
-    st.markdown('<p class="section-title">📅 Calendario annaffiature</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="section-title">📅 Calendario annaffiature — {selected_house}</p>', unsafe_allow_html=True)
 
-    plants = get_all_plants()
+    plants = plants_all
     if not plants:
         st.info("Nessuna pianta registrata. Prima aggiungi una pianta!", icon="🌱")
     else:
@@ -509,9 +527,9 @@ elif "Calendario" in page:
 # ──────────────────────────────────────────────────────────────────────────────
 
 elif "Gestisci" in page:
-    st.markdown('<p class="section-title">✏️ Gestisci le piante</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="section-title">✏️ Gestisci le piante — {selected_house}</p>', unsafe_allow_html=True)
 
-    plants = get_all_plants()
+    plants = plants_all
     if not plants:
         st.info("Nessuna pianta registrata.", icon="🌱")
     else:
@@ -532,6 +550,7 @@ elif "Gestisci" in page:
                 with c2:
                     new_freq  = st.number_input("Frequenza (giorni)", min_value=1, max_value=365,
                                                 value=plant["watering_frequency_days"])
+                    new_house = st.text_input("Casa", value=plant.get("house") or "Vali")
                 new_notes = st.text_area("Note", value=plant.get("notes", ""), height=80)
                 new_image = st.text_input(
                     "URL Immagine", 
@@ -549,6 +568,7 @@ elif "Gestisci" in page:
                     watering_frequency_days=int(new_freq),
                     notes=new_notes,
                     image_url=new_image,
+                    house=new_house,
                 )
                 st.success("✅ Pianta aggiornata!")
                 st.rerun()

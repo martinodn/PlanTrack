@@ -2,7 +2,7 @@
 data_manager.py – Gestione persistente dei dati delle piante via Google Sheets.
 
 Struttura dello Spreadsheet (due fogli):
-  - plants       : id | name | room | watering_frequency_days | notes | image_url | created_at
+  - plants       : id | name | room | watering_frequency_days | notes | image_url | house | created_at
   - watering_log : id | plant_id | watered_at
 
 Le credenziali vengono lette da st.secrets["gcp_service_account"].
@@ -30,7 +30,7 @@ WATERING_SHEET = "watering_log"
 
 PLANTS_HEADERS = [
     "id", "name", "room", "watering_frequency_days",
-    "notes", "image_url", "created_at",
+    "notes", "image_url", "house", "created_at",
 ]
 WATERING_HEADERS = ["id", "plant_id", "watered_at"]
 
@@ -108,6 +108,7 @@ def _build_plant(row: dict, watering_rows: list[dict]) -> dict:
         "watering_frequency_days": int(row.get("watering_frequency_days", 7)),
         "notes": row.get("notes", ""),
         "image_url": row.get("image_url", ""),
+        "house": row.get("house") or "Vali",
         "created_at": row.get("created_at", ""),
         "watering_log": log,
     }
@@ -135,6 +136,7 @@ def add_plant(
     watering_frequency_days: int,
     notes: str = "",
     image_url: str = "",
+    house: str = "Vali",
 ) -> dict:
     """Aggiunge una nuova pianta e restituisce l'oggetto creato."""
     plant_id = str(uuid.uuid4())
@@ -147,6 +149,7 @@ def add_plant(
         watering_frequency_days,
         notes.strip(),
         image_url,
+        house.strip(),
         created_at,
     ])
     _invalidate_cache()
@@ -157,6 +160,7 @@ def add_plant(
         "watering_frequency_days": watering_frequency_days,
         "notes": notes.strip(),
         "image_url": image_url,
+        "house": house.strip(),
         "created_at": created_at,
         "watering_log": [],
     }
