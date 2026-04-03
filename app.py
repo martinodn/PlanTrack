@@ -219,6 +219,7 @@ def _render_plant_card(plant: dict, col):
     📅 Prossima: <b>{next_str}</b>
   </p>
   <p style="font-size:.80rem;color:#888;font-style:italic">{_days_label(plant)}</p>
+  <p style="font-size:.70rem;color:red;font-style:italic">DEBUG CASA: {plant.get('house', 'N/A')}</p>
   {notes_html}
 </div>
 """,
@@ -251,11 +252,16 @@ with st.sidebar:
     
     selected_house = st.sidebar.selectbox("🏠 Seleziona Casa", houses, index=0)
     
-    # Filtro globale per casa (mappando anche eventuali vecchi valori a Vali)
-    plants_all = [
-        p for p in all_plants_raw 
-        if (p.get("house") or "Vali") == selected_house or (selected_house == "Vali" and p.get("house") == "Casa Principale")
-    ]
+    # Filtro globale per casa (robusto e case-insensitive)
+    def _get_house(p):
+        # Cerca il campo in modo case-insensitive
+        h = p.get("house") or p.get("House") or p.get("CASA") or ""
+        h = str(h).strip()
+        if h in ("", "Casa Principale", "None"):
+            return "Vali"
+        return h
+
+    plants_all = [p for p in all_plants_raw if _get_house(p).lower() == selected_house.lower()]
     # ──────────────────────────────────────────────────
 
     page = st.radio(
