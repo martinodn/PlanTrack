@@ -496,19 +496,28 @@ elif "Calendario" in page:
     if not plants:
         st.info("Nessuna pianta registrata. Prima aggiungi una pianta!", icon="🌱")
     else:
+        # Ordinamento: prima quelle a cui manca meno (o più in ritardo)
+        def sort_key(p):
+            nxt = get_next_watering(p)
+            if nxt is None:
+                return datetime.max.replace(tzinfo=None) # Mai annaffiate in fondo
+            return nxt.replace(tzinfo=None)
+
+        plants_sorted = sorted(plants, key=sort_key)
+
         tab1, tab2, tab3 = st.tabs(["📊 Timeline", "🗓 Heatmap", "📋 Tabella"])
 
         with tab1:
             days_ahead = st.slider("Giorni da visualizzare", 7, 60, 30)
-            fig_gantt = build_gantt_figure(plants, days_ahead)
+            fig_gantt = build_gantt_figure(plants_sorted, days_ahead)
             st.plotly_chart(fig_gantt, use_container_width=True)
 
         with tab2:
-            fig_heat = build_heatmap_figure(plants)
+            fig_heat = build_heatmap_figure(plants_sorted)
             st.plotly_chart(fig_heat, use_container_width=True)
 
         with tab3:
-            df = build_schedule_dataframe(plants)
+            df = build_schedule_dataframe(plants_sorted)
             if not df.empty:
                 # Rimuovi colonne interne
                 display_df = df.drop(columns=["ID", "_status"], errors="ignore")
