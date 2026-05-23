@@ -188,7 +188,7 @@ def _days_label(plant: dict) -> str:
     return f"Tra {diff} giorno/i"
 
 
-def _render_plant_card(plant: dict, col):
+def _render_plant_card(plant: dict, col, show_water_button: bool = False):
     """Renderizza la card di una singola pianta all'interno di una colonna."""
     status  = watering_status(plant)
     last    = get_last_watered(plant)
@@ -224,6 +224,11 @@ def _render_plant_card(plant: dict, col):
 """,
             unsafe_allow_html=True,
         )
+        if show_water_button:
+            if st.button("💧 Registra annaffiatura", key=f"water_dash_{plant['id']}", use_container_width=True):
+                log_watering(plant["id"])
+                st.session_state[f"watered_msg_{plant['id']}"] = f"✅ **{plant['name']}** annaffiata con successo!"
+                st.rerun()
 
 
 # ──────────────────────────────────────────────────────────────────────────────
@@ -324,12 +329,19 @@ if "Dashboard" in page:
         if not visible:
             st.warning("Nessuna pianta corrisponde ai filtri selezionati.")
         else:
+            # Mostra eventuali messaggi di successo da annaffiature rapide
+            for p in visible:
+                msg_key = f"watered_msg_{p['id']}"
+                if msg_key in st.session_state:
+                    st.success(st.session_state[msg_key])
+                    del st.session_state[msg_key]
+
             # Render a griglia
             for row_start in range(0, len(visible), cols_per_row):
                 row_plants = visible[row_start : row_start + cols_per_row]
                 cols = st.columns(cols_per_row)
                 for plant, col in zip(row_plants, cols):
-                    _render_plant_card(plant, col)
+                    _render_plant_card(plant, col, show_water_button=True)
 
         # Legenda stati
         st.divider()
