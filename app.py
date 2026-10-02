@@ -26,8 +26,10 @@ from utils.data_manager import (
     delete_plant,
     delete_watering_log_entry,
     get_all_plants,
+    get_last_fertilized,
     get_last_watered,
     get_next_watering,
+    log_fertilizing,
     log_watering,
     update_plant,
     watering_status,
@@ -193,9 +195,11 @@ def _render_plant_card(plant: dict, col, show_water_button: bool = False):
     status  = watering_status(plant)
     last    = get_last_watered(plant)
     next_dt = get_next_watering(plant)
+    last_fert = get_last_fertilized(plant)
 
     last_str = last.strftime("%d/%m/%Y %H:%M") if last else "—"
     next_str = next_dt.strftime("%d/%m/%Y") if next_dt else "—"
+    fert_str = last_fert.strftime("%d/%m/%Y") if last_fert else "—"
 
     notes_html = (
         f'<p style="font-size:.78rem;color:#9E9E9E;margin-top:4px">📝 {plant["notes"]}</p>'
@@ -215,8 +219,9 @@ def _render_plant_card(plant: dict, col, show_water_button: bool = False):
   <p style="margin:0 0 6px 0;color:#757575;font-size:.85rem">🏠 {plant['room']} &nbsp;|&nbsp; 💧 ogni {plant['watering_frequency_days']} giorni</p>
   {_badge(status)}
   <p style="margin:6px 0 2px 0;font-size:.82rem;color:#555">
-    ⏱ Ultima: <b>{last_str}</b><br>
-    📅 Prossima: <b>{next_str}</b>
+    ⏱ Ultima annaffiatura: <b>{last_str}</b><br>
+    📅 Prossima: <b>{next_str}</b><br>
+    🌿 Ultima concimatura: <b>{fert_str}</b>
   </p>
   <p style="font-size:.80rem;color:#888;font-style:italic">{_days_label(plant)}</p>
   {notes_html}
@@ -225,9 +230,14 @@ def _render_plant_card(plant: dict, col, show_water_button: bool = False):
             unsafe_allow_html=True,
         )
         if show_water_button:
-            if st.button("💧 Registra annaffiatura", key=f"water_dash_{plant['id']}", use_container_width=True):
+            c_w, c_f = col.columns(2)
+            if c_w.button("💧 Annaffia", key=f"water_dash_{plant['id']}", use_container_width=True):
                 log_watering(plant["id"])
                 st.session_state[f"watered_msg_{plant['id']}"] = f"✅ **{plant['name']}** annaffiata con successo!"
+                st.rerun()
+            if c_f.button("🌿 Concima", key=f"fert_dash_{plant['id']}", use_container_width=True):
+                log_fertilizing(plant["id"])
+                st.session_state[f"fertilized_msg_{plant['id']}"] = f"✅ Concimatura di **{plant['name']}** registrata!"
                 st.rerun()
 
 
@@ -341,6 +351,11 @@ if "Dashboard" in page:
                 row_plants = visible[row_start : row_start + cols_per_row]
                 cols = st.columns(cols_per_row)
                 for plant, col in zip(row_plants, cols):
+                    # Mostra eventuali messaggi di concimatura
+                    fert_key = f"fertilized_msg_{plant['id']}"
+                    if fert_key in st.session_state:
+                        st.success(st.session_state[fert_key])
+                        del st.session_state[fert_key]
                     _render_plant_card(plant, col, show_water_button=True)
 
         # Legenda stati
@@ -428,7 +443,7 @@ elif "Annaffiatura" in page:
             last   = get_last_watered(plant)
             next_dt = get_next_watering(plant)
 
-            c1, c2, c3, c4 = st.columns([3, 2, 2, 1])
+            c1, c2, c3, c4, c5 = st.columns([3, 2, 2, 1, 1])
             with c1:
                 st.markdown(
                     f'<b style="font-size:1rem">{plant["name"]}</b> '
@@ -437,13 +452,20 @@ elif "Annaffiatura" in page:
                     unsafe_allow_html=True,
                 )
             with c2:
-                st.caption(f"Ultima: {last.strftime('%d/%m/%Y %H:%M') if last else '—'}")
+                st.caption(f"Ultima annaffiatura: {last.strftime('%d/%m/%Y %H:%M') if last else '—'}")
+                last_fert = get_last_fertilized(plant)
+                st.caption(f"🌿 Ultima concimatura: {last_fert.strftime('%d/%m/%Y') if last_fert else '—'}")
             with c3:
                 st.caption(f"Prossima: {next_dt.strftime('%d/%m/%Y') if next_dt else '—'}")
             with c4:
                 if st.button("💧 Annaffia", key=f"water_{plant['id']}"):
                     log_watering(plant["id"])
                     st.success(f"✅ {plant['name']} annaffiata!")
+                    st.rerun()
+            with c5:
+                if st.button("🌿 Concima", key=f"fert_{plant['id']}"):
+                    log_fertilizing(plant["id"])
+                    st.success(f"✅ {plant['name']} concimata!")
                     st.rerun()
 
             st.divider()

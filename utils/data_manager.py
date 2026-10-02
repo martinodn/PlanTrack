@@ -2,7 +2,7 @@
 data_manager.py – Gestione persistente dei dati delle piante via Google Sheets.
 
 Struttura dello Spreadsheet (due fogli):
-  - plants       : id | name | room | watering_frequency_days | notes | image_url | house | created_at
+  - plants       : id | name | room | watering_frequency_days | notes | image_url | house | created_at | last_fertilized
   - watering_log : id | plant_id | watered_at
 
 Le credenziali vengono lette da st.secrets["gcp_service_account"].
@@ -30,7 +30,7 @@ WATERING_SHEET = "watering_log"
 
 PLANTS_HEADERS = [
     "id", "name", "room", "watering_frequency_days",
-    "notes", "image_url", "house", "created_at",
+    "notes", "image_url", "house", "created_at", "last_fertilized",
 ]
 WATERING_HEADERS = ["id", "plant_id", "watered_at"]
 
@@ -53,12 +53,21 @@ def _get_spreadsheet() -> gspread.Spreadsheet:
 
 
 def _ensure_sheets(spreadsheet: gspread.Spreadsheet) -> None:
-    """Crea i fogli con intestazioni se non esistono già."""
+    """Crea i fogli con intestazioni se non esistono già.
+    Aggiunge anche la colonna last_fertilized se mancante nel foglio plants.
+    """
     existing = {ws.title for ws in spreadsheet.worksheets()}
 
     if PLANTS_SHEET not in existing:
         ws = spreadsheet.add_worksheet(PLANTS_SHEET, rows=1000, cols=len(PLANTS_HEADERS))
         ws.append_row(PLANTS_HEADERS)
+    else:
+        # Assicura che la colonna last_fertilized esista (retrocompatibilità)
+        ws = spreadsheet.worksheet(PLANTS_SHEET)
+        existing_headers = ws.row_values(1)
+        if "last_fertilized" not in existing_headers:
+            col_index = len(existing_headers) + 1
+            ws.update_cell(1, col_index, "last_fertilized")
 
     if WATERING_SHEET not in existing:
         ws = spreadsheet.add_worksheet(WATERING_SHEET, rows=5000, cols=len(WATERING_HEADERS))
@@ -111,6 +120,7 @@ def _build_plant(row: dict, watering_rows: list[dict]) -> dict:
         "house": row.get("house") or "Vali",
         "created_at": row.get("created_at", ""),
         "watering_log": log,
+        "last_fertilized": row.get("last_fertilized", ""),
     }
 
 
@@ -151,6 +161,7 @@ def add_plant(
         image_url,
         house.strip(),
         created_at,
+        "",  # last_fertilized (vuoto alla creazione)
     ])
     _invalidate_cache()
     return {
@@ -163,6 +174,7 @@ def add_plant(
         "house": house.strip(),
         "created_at": created_at,
         "watering_log": [],
+        "last_fertilized": "",
     }
 
 
@@ -290,3 +302,29 @@ def watering_status(plant: dict) -> str:
     if diff == 0:
         return "today"
     return "upcoming"
+
+
+# ──────────────────────────────────────────────
+# API pubblica – Concimatura
+# ──────────────────────────────────────────────
+
+def log_fertilizing(plant_id: str, timestamp: datetime | None = None) -> bool:
+    """
+    Registra la data dell'ultima concimatura per la pianta indicata.
+    Salva il timestamp direttamente nel foglio plants (colonna last_fertilized).
+    Se timestamp è None, usa la data/ora corrente.
+    Restituisce True se l'operazione è riuscita.
+    """
+    ts = (timestamp or datetime.now()).isoformat()
+    return update_plant(plant_id, last_fertilized=ts)
+
+
+def get_last_fertilized(plant: dict) -> datetime | None:
+    """Restituisce la data/ora dell'ultima concimatura, o None se mai concimata."""
+    val = plant.get("last_fertilized", "")
+    if not val:
+        return None
+    try:
+        return datetime.fromisoformat(val)
+    except (ValueError, TypeError):
+        return None
