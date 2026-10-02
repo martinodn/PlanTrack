@@ -66,8 +66,9 @@ def _ensure_sheets(spreadsheet: gspread.Spreadsheet) -> None:
         ws = spreadsheet.worksheet(PLANTS_SHEET)
         existing_headers = ws.row_values(1)
         if "last_fertilized" not in existing_headers:
-            col_index = len(existing_headers) + 1
-            ws.update_cell(1, col_index, "last_fertilized")
+            import gspread.utils as gu
+            col_letter = gu.rowcol_to_a1(1, len(existing_headers) + 1)[:-1]  # e.g. "I"
+            ws.update(f"{col_letter}1", [["last_fertilized"]], value_input_option="RAW")
 
     if WATERING_SHEET not in existing:
         ws = spreadsheet.add_worksheet(WATERING_SHEET, rows=5000, cols=len(WATERING_HEADERS))
