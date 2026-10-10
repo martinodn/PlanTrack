@@ -126,7 +126,7 @@ def check_password():
                 unsafe_allow_html=True
             )
             st.image(img_path, use_container_width=True)
-        time.sleep(2)
+        time.sleep(4)
         st.session_state["show_welcome_screen"] = False
         st.rerun()
         return False
