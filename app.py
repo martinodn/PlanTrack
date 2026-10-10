@@ -12,15 +12,22 @@ Struttura:
 """
 
 import sys
+import time
+from datetime import datetime
 from pathlib import Path
 
 # Aggiunge la root del progetto al path per rendere importabili i moduli utils
 sys.path.insert(0, str(Path(__file__).parent))
 
-from datetime import datetime
-
 import streamlit as st
 
+from utils.calendar_utils import (
+    STATUS_COLOR,
+    STATUS_LABEL,
+    build_gantt_figure,
+    build_heatmap_figure,
+    build_schedule_dataframe,
+)
 from utils.data_manager import (
     add_plant,
     delete_plant,
@@ -34,17 +41,29 @@ from utils.data_manager import (
     update_plant,
     watering_status,
 )
-from utils.calendar_utils import (
-    STATUS_COLOR,
-    STATUS_LABEL,
-    build_gantt_figure,
-    build_heatmap_figure,
-    build_schedule_dataframe,
+
+# ──────────────────────────────────────────────────────────────────────────────
+# Configurazione pagina
+# ──────────────────────────────────────────────────────────────────────────────
+st.set_page_config(
+    page_title="PlanTrack 🌿",
+    page_icon="🌿",
+    layout="wide",
+    initial_sidebar_state="expanded",
 )
 
 # ──────────────────────────────────────────────────────────────────────────────
 # Autenticazione
 # ──────────────────────────────────────────────────────────────────────────────
+
+def get_rahel_image_path() -> str:
+    """Restituisce il percorso dell'immagine rahel nella cartella data."""
+    data_dir = Path(__file__).parent / "data"
+    for filename in ["rahel.jpeg", "rahel.jpg", "rahel.png", "rahel.webp"]:
+        p = data_dir / filename
+        if p.exists():
+            return str(p)
+    return str(data_dir / "rahel.jpeg")
 
 def check_password():
     """Restituisce True se l'utente ha inserito la password corretta."""
@@ -53,6 +72,7 @@ def check_password():
         """Controlla se la password inserita è corretta."""
         if st.session_state["password"] == st.secrets["PASSWORD"]:
             st.session_state["password_correct"] = True
+            st.session_state["show_welcome_screen"] = True
             del st.session_state["password"]  # non conservare la password in chiaro
         else:
             st.session_state["password_correct"] = False
@@ -77,10 +97,38 @@ def check_password():
         return False
     elif not st.session_state["password_correct"]:
         # Password errata, mostra di nuovo il form
+        st.markdown(
+            """
+            <div style="text-align:center;padding:50px 0">
+              <span style="font-size:5rem">🌿</span>
+              <h1 style="color:#2E7D32">PlanTrack Login</h1>
+              <p>Inserisci la password per gestire le tue piante</p>
+            </div>
+            """,
+            unsafe_allow_html=True
+        )
         st.text_input(
             "Password", type="password", on_change=password_entered, key="password"
         )
         st.error("😕 Password errata")
+        return False
+    elif st.session_state.get("show_welcome_screen", False):
+        # Mostra l'immagine per due secondi prima di accedere all'app
+        img_path = get_rahel_image_path()
+        col1, col2, col3 = st.columns([1, 2, 1])
+        with col2:
+            st.markdown(
+                """
+                <div style="text-align:center; padding: 20px 0 10px 0;">
+                  <h2 style="color:#2E7D32; margin-bottom: 15px;">Login riuscito baby! 🌿</h2>
+                </div>
+                """,
+                unsafe_allow_html=True
+            )
+            st.image(img_path, use_container_width=True)
+        time.sleep(2)
+        st.session_state["show_welcome_screen"] = False
+        st.rerun()
         return False
     else:
         # Password corretta
@@ -88,16 +136,6 @@ def check_password():
 
 if not check_password():
     st.stop()
-
-# ──────────────────────────────────────────────────────────────────────────────
-# Configurazione pagina
-# ──────────────────────────────────────────────────────────────────────────────
-st.set_page_config(
-    page_title="PlanTrack 🌿",
-    page_icon="🌿",
-    layout="wide",
-    initial_sidebar_state="expanded",
-)
 
 # ──────────────────────────────────────────────────────────────────────────────
 # CSS personalizzato
