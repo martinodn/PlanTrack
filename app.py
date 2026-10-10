@@ -113,9 +113,9 @@ def check_password():
         st.error("😕 Password errata")
         return False
     elif st.session_state.get("show_welcome_screen", False):
-        # Mostra l'immagine per due secondi prima di accedere all'app
+        # Mostra l'immagine per 5 secondi prima di accedere all'app
         img_path = get_rahel_image_path()
-        col1, col2, col3 = st.columns([1, 2, 1])
+        col1, col2, col3 = st.columns([1, 1, 1])
         with col2:
             st.markdown(
                 """
@@ -126,7 +126,7 @@ def check_password():
                 unsafe_allow_html=True
             )
             st.image(img_path, use_container_width=True)
-        time.sleep(4)
+        time.sleep(5)
         st.session_state["show_welcome_screen"] = False
         st.rerun()
         return False
